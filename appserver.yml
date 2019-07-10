@@ -1,0 +1,77 @@
+- hosts: appserver
+  become: yes
+  handlers:
+    - name: restart Apache
+      service: name=httpd state=restarted
+  tasks:
+    - name: install httpd web server
+      yum:
+        name: httpd
+        state: present
+    - name: Ensure httpd is enabled and started.
+      service:
+        name: httpd
+        state: started
+        enabled: yes
+    - name: Install epel repo
+      yum_repository: 
+        name: epel
+        description: Epel Yum repo
+        baseurl: https://dl.fedoraproject.org/pub/epel/7/x86_64/ 
+    - name: import gpg keys
+      rpm_key: 
+        state: present
+        key: https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-7
+    - name: install webtatic
+      yum:
+        name: https://mirror.webtatic.com/yum/el7/webtatic-release.rpm
+        state: present
+    - name: Install php packages
+      yum: name={{ item }} state=present
+      with_items:
+        - mod_php72w
+        - php72w-cli
+        - php72w-common
+        - php72w-gd
+        - php72w-mbstring
+        #- php72w-mcrypt
+        #- php72w-msqlnd
+        - php72w-xml
+        - mariadb
+        - unzip
+    - name: download and extract codeigniter to /var/www/html
+      unarchive:
+        src: https://github.com/bcit-ci/CodeIgniter/archive/3.1.5.zip
+        dest: /var/www/html
+        remote_src: yes
+    - name: Change file ownership tp vagrant.
+      file:
+        path: /var/www/html
+        owner: vagrant
+        group: vagrant
+        recurse: yes
+    - name: Configure apache to point to codeigniter.
+      lineinfile:
+        path: /etc/httpd/conf/httpd.conf
+        regexp: '^.*DocumentRoot "/var/www/html".*$'
+        line: DocumentRoot "/var/www/html/CodeIgniter-3.1.5"
+        state: present
+      notify: 
+        - restart Apache 
+    - name: copy htaccess file to codeigniter.
+      copy:
+        src: htaccess
+        dest: /var/www/html/CodeIgniter-3.1.5/.htaccess
+        owner: vagrant
+        group: vagrant
+    - name: allow htaccess file for override.
+      lineinfile:
+        path: /etc/httpd/conf/httpd.conf
+        insertafter: '</Directory>'
+        line: |
+          <Directory "/var/www/html/CodeIgniter-3.1.5">
+            AllowOverride all
+          </Directory>
+      notify:
+      - restart Apache
+           
